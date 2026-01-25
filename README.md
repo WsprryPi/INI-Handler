@@ -16,8 +16,8 @@ This project is a simple and efficient **INI file parser** written in C++. It pr
 
 ## Dependencies
 
-- **C++17 or later**
-- `g++` (or another C++ compiler with C++17 support)
+- **C++20 or later**
+- `g++` (or another C++ compiler with C++20 support)
 - `cppcheck` (for linting, optional)
 
 ## Installation
