@@ -1,9 +1,7 @@
 /**
  * @file ini_file.hpp
- * @brief INI file handling class definition.
- * @details This class provides functionality to load, save, and retrieve
- *          configuration values from an INI file format. Supports string,
- *          boolean, integer, and double values with optional default values.
+ * @brief Declaration of the IniFile singleton used for INI configuration
+ *        loading, editing, repair, and reset operations.
  *
  * This software is distributed under the MIT License. See LICENSE.md for
  * details.
@@ -39,247 +37,293 @@
 
 /**
  * @class IniFile
- * @brief Handles reading and writing INI-style configuration files.
- * @details This class loads an INI file into an internal data structure,
- *          allowing retrieval and modification of values with optional
- *          default fallbacks.
+ * @brief Handles reading, editing, saving, resetting, and repairing INI
+ *        configuration files.
+ *
+ * The class maintains an in-memory representation of parsed INI data while also
+ * preserving the original file layout in order to rewrite existing keys
+ * without discarding comments or blank lines. It is implemented as a singleton
+ * because WsprryPi treats the INI configuration as a single shared resource.
  */
 class IniFile
 {
 public:
     /**
-     * @brief Returns the singleton IniFile instance.
+     * @brief Returns the singleton instance.
      *
-     * Constructs the static IniFile object upon first invocation and
-     * returns a reference to it. Ensures only one instance exists.
-     *
-     * @return Reference to the single IniFile instance.
+     * @return Reference to the global IniFile instance.
      */
     static IniFile &instance();
 
     /**
-     * @brief Sets the filename for loading and saving operations.
-     * @param filename Path to the INI file.
+     * @brief Sets the INI filename and immediately loads it.
+     *
+     * @param filename Path to the live INI file.
+     *
+     * @throws std::runtime_error If the file cannot be loaded.
      */
     void set_filename(const std::string &filename);
 
     /**
-     * @brief Loads the INI file into memory.
-     * @return True if the file was successfully loaded, false otherwise.
+     * @brief Loads the configured INI file into memory.
+     *
+     * Parses sections and key/value pairs, preserves the original file lines,
+     * and rebuilds the lookup index used for in-place writes.
+     *
+     * @return True when the file was successfully loaded.
+     * @throws std::runtime_error If no filename is configured or the file
+     *         cannot be opened.
      */
     bool load();
 
     /**
-     * @brief Saves the current data to the INI file.
-     * @return True if the file was successfully saved, false otherwise.
-     */
-    bool save();
-
-    /**
-     * @brief Retrieves a string value from the INI file.
-     * @param section The section name.
-     * @param key The key name.
-     * @return The corresponding value as a string.
-     * @throws std::runtime_error if the section or key is not found.
-     */
-    std::string get_value(const std::string &section, const std::string &key) const;
-
-    /**
-     * @brief Retrieves a string value with an optional default.
-     */
-    std::string get_string_value(const std::string &section, const std::string &key) const;
-
-    /**
-     * @brief Retrieves a boolean value with an optional default.
-     */
-    bool get_bool_value(const std::string &section, const std::string &key) const;
-
-    /**
-     * @brief Retrieves an integer value with an optional default.
-     */
-    int get_int_value(const std::string &section, const std::string &key) const;
-
-    /**
-     * @brief Retrieves a double value with an optional default.
-     */
-    double get_double_value(const std::string &section, const std::string &key) const;
-
-    /**
-     * @brief Sets a string value in the INI file.
+     * @brief Saves in-memory changes to the live INI file.
      *
-     * Updates the internal data map with the given section/key and
-     * marks the file as having pending changes.
+     * Rewrites only keys that already exist in the original layout, preserving
+     * comments, blank lines, and section ordering. The write is performed
+     * atomically by writing a temporary file in the same directory and then
+     * renaming it over the live file.
      *
-     * @param section  The section under which to store the value.
-     * @param key      The key within the section.
-     * @param value    The string value to assign to the key.
+     * @throws std::runtime_error If no filename is configured, the temporary
+     *         file cannot be written, or the atomic replacement fails.
+     */
+    void save();
+
+    /**
+     * @brief Retrieves a raw string value.
+     *
+     * @param section Section name.
+     * @param key Key name.
+     * @return Stored value as a string.
+     * @throws std::runtime_error If the section or key is not present.
+     */
+    std::string get_value(const std::string &section,
+                          const std::string &key) const;
+
+    /**
+     * @brief Retrieves a value as a string.
+     *
+     * @param section Section name.
+     * @param key Key name.
+     * @return Stored value as a string.
+     * @throws std::runtime_error If the section or key is not present.
+     */
+    std::string get_string_value(const std::string &section,
+                                 const std::string &key) const;
+
+    /**
+     * @brief Retrieves a value as a boolean.
+     *
+     * Accepts case-insensitive true values such as "true", "t", and "1".
+     * Any other stored value is interpreted as false.
+     *
+     * @param section Section name.
+     * @param key Key name.
+     * @return Stored value converted to bool.
+     * @throws std::runtime_error If the section or key is not present.
+     */
+    bool get_bool_value(const std::string &section,
+                        const std::string &key) const;
+
+    /**
+     * @brief Retrieves a value as an integer.
+     *
+     * @param section Section name.
+     * @param key Key name.
+     * @return Stored value converted to int.
+     * @throws std::runtime_error If the section or key is not present or the
+     *         stored value cannot be converted to an integer.
+     */
+    int get_int_value(const std::string &section,
+                      const std::string &key) const;
+
+    /**
+     * @brief Retrieves a value as a double.
+     *
+     * @param section Section name.
+     * @param key Key name.
+     * @return Stored value converted to double.
+     * @throws std::runtime_error If the section or key is not present or the
+     *         stored value cannot be converted to a double.
+     */
+    double get_double_value(const std::string &section,
+                            const std::string &key) const;
+
+    /**
+     * @brief Sets a string value in memory.
+     *
+     * The new value is tracked as a pending change. It is only written to disk
+     * if the corresponding section and key already exist in the live file
+     * layout when save() or commit_changes() is called.
+     *
+     * @param section Section name.
+     * @param key Key name.
+     * @param value Value to store.
      */
     void set_string_value(const std::string &section,
                           const std::string &key,
                           const std::string &value);
 
     /**
-     * @brief Sets a boolean value in the INI file.
+     * @brief Sets a boolean value in memory.
      *
-     * Converts the boolean to "true"/"false", updates the internal data,
-     * and marks the file as having pending changes.
-     *
-     * @param section  The section under which to store the value.
-     * @param key      The key within the section.
-     * @param value    The boolean value to assign to the key.
+     * @param section Section name.
+     * @param key Key name.
+     * @param value Value to store.
      */
     void set_bool_value(const std::string &section,
                         const std::string &key,
                         bool value);
 
     /**
-     * @brief Sets an integer value in the INI file.
+     * @brief Sets an integer value in memory.
      *
-     * Converts the integer to its string representation, updates the internal
-     * data, and marks the file as having pending changes.
-     *
-     * @param section  The section under which to store the value.
-     * @param key      The key within the section.
-     * @param value    The integer value to assign to the key.
+     * @param section Section name.
+     * @param key Key name.
+     * @param value Value to store.
      */
     void set_int_value(const std::string &section,
                        const std::string &key,
                        int value);
 
     /**
-     * @brief Sets a double value in the INI file.
+     * @brief Sets a double value in memory.
      *
-     * Converts the double to its string representation, updates the internal
-     * data, and marks the file as having pending changes.
-     *
-     * @param section  The section under which to store the value.
-     * @param key      The key within the section.
-     * @param value    The double value to assign to the key.
+     * @param section Section name.
+     * @param key Key name.
+     * @param value Value to store.
      */
     void set_double_value(const std::string &section,
                           const std::string &key,
                           double value);
 
     /**
-     * @brief Commits any pending changes to the INI file.
+     * @brief Saves pending in-memory changes when needed.
+     *
+     * This is the normal persistence path for routine configuration updates.
+     * It does not rebuild the file from stock. If there are no pending changes,
+     * this method does nothing.
+     *
+     * @throws std::runtime_error If save() fails.
      */
     void commit_changes();
 
     /**
-     * @brief Retrieves the parsed INI data.
-     * @return A const reference to the internal data storage.
+     * @brief Replaces the live INI file with the stock template.
+     *
+     * Reads `<filename>.stock`, replaces every `%SEMANTIC_VERSION%` token with
+     * the supplied semantic version string, writes the result atomically over
+     * the live file, reloads the in-memory data, and clears the pending-change
+     * state.
+     *
+     * @param semantic_version Semantic version string inserted into the stock
+     *        template.
+     * @throws std::runtime_error If no filename is configured, the stock file
+     *         cannot be read, the temporary file cannot be written, or the
+     *         atomic replacement fails.
      */
-    const std::map<std::string, std::unordered_map<std::string, std::string>> &getData() const;
+    void reset_to_stock(const std::string &semantic_version);
 
     /**
-     * @brief Sets the internal data of the INI file.
+     * @brief Repairs the live INI file using the stock template.
      *
-     * @param data A new mapping of sections to key/value pairs.
-     * @return True if the data was set successfully.
+     * The repair process loads the current live file, resets the file to the
+     * stock template, then reapplies only those preserved values whose section
+     * and key still exist in the stock schema. This restores missing sections
+     * and keys from stock while retaining compatible user values where
+     * possible.
+     *
+     * @param semantic_version Semantic version string inserted into the stock
+     *        template during the reset phase.
+     * @throws std::runtime_error If no filename is configured or if the reset
+     *         or save operations fail.
      */
-    void setData(const std::map<std::string, std::unordered_map<std::string, std::string>> &data);
+    void repair_from_stock(const std::string &semantic_version);
+
+    /**
+     * @brief Returns the parsed INI data.
+     *
+     * @return Const reference to the internal section/key/value map.
+     */
+    const std::map<std::string,
+                   std::unordered_map<std::string, std::string>> &getData()
+        const;
+
+    /**
+     * @brief Replaces the internal parsed data map.
+     *
+     * The caller is responsible for supplying a schema-compatible map if the
+     * result is expected to be written back to the current file layout.
+     *
+     * @param data Replacement section/key/value map.
+     */
+    void setData(const std::map<std::string,
+                                std::unordered_map<std::string,
+                                                   std::string>> &data);
 
 private:
-    /**
-     * @brief Default constructor.
-     *
-     * Constructs an IniFile with no filename set. Use set_filename() before use.
-     */
+    /** @brief Default constructor for the singleton instance. */
     IniFile() = default;
 
-    /**
-     * @brief Default destructor.
-     *
-     * Tears down an IniFile.
-     */
+    /** @brief Default destructor. */
     ~IniFile() = default;
 
-    /**
-     * @brief Deleted copy constructor.
-     *
-     * Prevents copying of the singleton instance.
-     */
+    /** @brief Copy construction is disabled for the singleton. */
     IniFile(const IniFile &) = delete;
 
-    /**
-     * @brief Deleted move constructor.
-     *
-     * Prevents moving of the singleton instance.
-     */
+    /** @brief Move construction is disabled for the singleton. */
     IniFile(IniFile &&) = delete;
 
-    /**
-     * @brief Deleted copy-assignment operator.
-     *
-     * Prevents assigning from another IniFile, preserving singleton uniqueness.
-     *
-     * @return Reference to this instance.
-     */
+    /** @brief Copy assignment is disabled for the singleton. */
     IniFile &operator=(const IniFile &) = delete;
 
-    /**
-     * @brief Deleted move-assignment operator.
-     *
-     * Prevents move-assigning from another IniFile, preserving singleton uniqueness.
-     *
-     * @return Reference to this instance.
-     */
+    /** @brief Move assignment is disabled for the singleton. */
     IniFile &operator=(IniFile &&) = delete;
 
-    /**
-     * @brief Path to the INI configuration file.
-     *
-     * This filename is used by load() and save() to access the file on disk.
-     */
+    /** @brief Path to the live INI file. */
     std::string _filename;
 
-    /**
-     * @brief Internal data storage.
-     *
-     * Maps each section name to a map of key/value string pairs.
-     */
+    /** @brief Parsed INI data indexed by section and key. */
     std::map<std::string, std::unordered_map<std::string, std::string>> _data;
 
-    /**
-     * @brief Original file lines.
-     *
-     * Stores every line from the INI file, including comments and blank lines,
-     * to allow preservation of formatting on save().
-     */
+    /** @brief Original file lines preserved for formatting-aware saves. */
     std::vector<std::string> _lines;
 
-    /**
-     * @brief Fast lookup index.
-     *
-     * Maps section/key pairs to their line number in _lines for in-place edits.
-     */
+    /** @brief Lookup table mapping section/key pairs to line numbers. */
     std::map<std::string, std::map<std::string, size_t>> _index;
 
+    /** @brief True when in-memory data has unsaved changes. */
+    bool _pendingChanges = false;
+
     /**
-     * @brief Trims whitespace from a string.
-     * @param str The string to trim.
-     * @return Trimmed string.
+     * @brief Trims leading and trailing whitespace.
+     *
+     * @param str Input string.
+     * @return Trimmed copy of the input string.
      */
     static std::string trim(const std::string &str);
 
     /**
-     * @brief Determines if a line is a comment.
-     * @param line The line to check.
-     * @return True if the line is a comment, false otherwise.
+     * @brief Determines whether a line is a full-line comment.
+     *
+     * @param line Input line.
+     * @return True when the line begins with `;` or `#`.
      */
     static bool is_comment(const std::string &line);
 
     /**
-     * @brief Converts a boolean value to string.
-     * @param value The boolean value.
+     * @brief Converts a boolean to the stored string representation.
+     *
+     * @param value Boolean value.
      * @return "true" or "false".
      */
     static std::string bool_to_string(bool value);
 
     /**
-     * @brief Converts a string to boolean.
-     * @param value The string to convert.
-     * @return True if the string represents a true value, false otherwise.
+     * @brief Converts a stored string value to bool.
+     *
+     * @param value Stored value.
+     * @return True for accepted true-like values, otherwise false.
      */
     static bool string_to_bool(const std::string &value);
 };
