@@ -38,6 +38,7 @@
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
+#include <unordered_set>
 
 namespace
 {
@@ -155,6 +156,7 @@ void IniFile::save()
     }
 
     std::string current_section;
+    std::unordered_map<std::string, std::unordered_set<std::string>> written_keys;
     for (size_t i = 0; i < _lines.size(); ++i)
     {
         const std::string trimmed = trim(_lines[i]);
@@ -181,6 +183,7 @@ void IniFile::save()
             {
                 file << key << " = "
                      << _data.at(current_section).at(key) << "\n";
+                written_keys[current_section].insert(key);
             }
             else
             {
@@ -190,6 +193,41 @@ void IniFile::save()
         else
         {
             file << _lines[i] << "\n";
+        }
+    }
+
+    bool appended_entries = false;
+    for (const auto &section_pair : _data)
+    {
+        const std::string &section = section_pair.first;
+        std::vector<std::string> missing_keys;
+
+        for (const auto &key_pair : section_pair.second)
+        {
+            if (written_keys[section].count(key_pair.first) == 0)
+            {
+                missing_keys.push_back(key_pair.first);
+            }
+        }
+
+        if (missing_keys.empty())
+        {
+            continue;
+        }
+
+        std::sort(missing_keys.begin(), missing_keys.end());
+
+        if (!appended_entries)
+        {
+            file << "\n";
+            appended_entries = true;
+        }
+
+        file << "[" << section << "]\n";
+
+        for (const auto &key : missing_keys)
+        {
+            file << key << " = " << section_pair.second.at(key) << "\n";
         }
     }
 
