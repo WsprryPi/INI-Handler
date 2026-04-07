@@ -523,6 +523,11 @@ IniFile::getData() const
     return _data;
 }
 
+bool IniFile::hasPendingChanges() const noexcept
+{
+    return _pendingChanges;
+}
+
 void IniFile::setData(
     const std::map<std::string,
                    std::unordered_map<std::string, std::string>> &data)

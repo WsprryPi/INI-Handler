@@ -249,6 +249,8 @@ public:
                    std::unordered_map<std::string, std::string>> &getData()
         const;
 
+    bool hasPendingChanges() const noexcept;
+
     /**
      * @brief Replaces the internal parsed data map.
      *
