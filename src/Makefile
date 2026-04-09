@@ -103,7 +103,6 @@ CXX_RELEASE_FLAGS := $(CXXFLAGS) -O2			# Release optimized
 # CXXFLAGS += -I$(abspath ./INI-Handler/src)
 # CXXFLAGS += -I$(abspath ./LCBLog/src)
 # CXXFLAGS += -I$(abspath ./MonitorFile/src)
-# CXXFLAGS += -I$(abspath ./WSPR-Message/src)
 # CXXFLAGS += -I$(abspath ./Singleton/src)
 # CXXFLAGS += -I$(abspath ./Broadcom-Mailbox/src)
 # CXXFLAGS += -I$(abspath ./PPM-Manager/src)
