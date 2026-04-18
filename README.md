@@ -133,7 +133,7 @@ auto call = iniFile.get_string_value("Common", "Call Sign");
 ### Writing
 
 ```cpp
-iniFile.set_string_value("Common", "Call Sign", "K1ABC");
+iniFile.set_string_value("Common", "Call Sign", "AA0NT");
 iniFile.commit_changes();
 ```
 
