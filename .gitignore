@@ -18,7 +18,18 @@ src/*.ini
 .idea/
 *.code-workspace
 
-# Project-specificfiles
+# macOS metadata on network/shared mounts
+._*
+.AppleDouble/
+.DS_Store
+
+# General Rules
+Thumbs.db
+*.log
+*.bak
+*.zip
+
+# Project-specific files
 *.err
 *.log
 *.bak
