@@ -31,6 +31,7 @@
 #define INI_FILE_HPP
 
 #include <map>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -198,6 +199,19 @@ public:
                           double value);
 
     /**
+     * @brief Removes one existing key from the next persisted INI file.
+     *
+     * The exact section/key line is omitted during the normal atomic save.
+     * Comments, blank lines, unrelated keys, and section ordering are retained.
+     * Reassigning the same key before save cancels the removal.
+     *
+     * @param section Section containing the key.
+     * @param key Key to remove.
+     * @return True when the key existed in parsed data or the loaded layout.
+     */
+    bool erase_value(const std::string &section, const std::string &key);
+
+    /**
      * @brief Saves pending in-memory changes when needed.
      *
      * This is the normal persistence path for routine configuration updates.
@@ -293,6 +307,9 @@ private:
 
     /** @brief Lookup table mapping section/key pairs to line numbers. */
     std::map<std::string, std::map<std::string, size_t>> _index;
+
+    /** @brief Exact section/key lines intentionally omitted by the next save. */
+    std::set<std::pair<std::string, std::string>> _removedKeys;
 
     /** @brief True when in-memory data has unsaved changes. */
     bool _pendingChanges = false;

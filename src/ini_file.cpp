@@ -136,6 +136,7 @@ bool IniFile::load()
         ++line_num;
     }
 
+    _removedKeys.clear();
     _pendingChanges = false;
     return true;
 }
@@ -178,6 +179,10 @@ void IniFile::save()
         if (pos != std::string::npos)
         {
             const std::string key = trim(trimmed.substr(0, pos));
+            if (_removedKeys.count({current_section, key}) > 0)
+            {
+                continue;
+            }
             if (!key.empty() && _data.count(current_section) > 0 &&
                 _data.at(current_section).count(key) > 0)
             {
@@ -450,8 +455,36 @@ void IniFile::set_string_value(const std::string &section,
                                const std::string &key,
                                const std::string &value)
 {
+    _removedKeys.erase({section, key});
     _data[section][key] = value;
     _pendingChanges = true;
+}
+
+bool IniFile::erase_value(const std::string &section, const std::string &key)
+{
+    if (_removedKeys.count({section, key}) > 0)
+    {
+        return false;
+    }
+
+    const bool existed_in_data =
+        _data.count(section) > 0 && _data.at(section).count(key) > 0;
+    const bool existed_in_layout =
+        _index.count(section) > 0 && _index.at(section).count(key) > 0;
+
+    if (existed_in_data)
+    {
+        _data[section].erase(key);
+    }
+
+    if (existed_in_data || existed_in_layout)
+    {
+        _removedKeys.insert({section, key});
+        _pendingChanges = true;
+        return true;
+    }
+
+    return false;
 }
 
 std::string IniFile::bool_to_string(bool value)
@@ -463,16 +496,14 @@ void IniFile::set_bool_value(const std::string &section,
                              const std::string &key,
                              bool value)
 {
-    _data[section][key] = bool_to_string(value);
-    _pendingChanges = true;
+    set_string_value(section, key, bool_to_string(value));
 }
 
 void IniFile::set_int_value(const std::string &section,
                             const std::string &key,
                             int value)
 {
-    _data[section][key] = std::to_string(value);
-    _pendingChanges = true;
+    set_string_value(section, key, std::to_string(value));
 }
 
 void IniFile::set_double_value(const std::string &section,
@@ -481,8 +512,7 @@ void IniFile::set_double_value(const std::string &section,
 {
     std::ostringstream oss;
     oss << value;
-    _data[section][key] = oss.str();
-    _pendingChanges = true;
+    set_string_value(section, key, oss.str());
 }
 
 std::string IniFile::trim(const std::string &str)
@@ -533,5 +563,17 @@ void IniFile::setData(
                    std::unordered_map<std::string, std::string>> &data)
 {
     _data = data;
+    for (auto removed = _removedKeys.begin(); removed != _removedKeys.end();)
+    {
+        const auto section = _data.find(removed->first);
+        if (section != _data.end() && section->second.count(removed->second) > 0)
+        {
+            removed = _removedKeys.erase(removed);
+        }
+        else
+        {
+            ++removed;
+        }
+    }
     _pendingChanges = true;
 }

@@ -71,6 +71,24 @@ namespace
         }
     }
 
+    void require_file_not_contains(const fs::path &path, const std::string &text)
+    {
+        std::ifstream file(path);
+        if (!file.is_open())
+        {
+            throw std::runtime_error("Cannot open file " + path.string() +
+                                     " for verification.");
+        }
+
+        const std::string contents((std::istreambuf_iterator<char>(file)),
+                                   std::istreambuf_iterator<char>());
+        if (contents.find(text) != std::string::npos)
+        {
+            throw std::runtime_error("Unexpected text found in " +
+                                     path.string() + ".");
+        }
+    }
+
     fs::path get_source_ini()
     {
         const fs::path system_ini(kSystemIni);
@@ -317,6 +335,36 @@ void test_writing(IniFile &config, const std::string &filename)
               << std::endl;
 }
 
+void test_key_erasure(IniFile &config, const std::string &filename)
+{
+    print_header("Testing explicit key erasure.");
+
+    require_file_contains(filename, "Use NTP =");
+    const std::string retained_call_sign =
+        config.get_string_value("Common", "Call Sign");
+
+    if (!config.erase_value("Extended", "Use NTP"))
+    {
+        throw std::runtime_error("Existing key was not marked for erasure.");
+    }
+    config.commit_changes();
+
+    require_file_not_contains(filename, "Use NTP =");
+    require_file_contains(filename, "[Extended]");
+    if (config.get_string_value("Common", "Call Sign") != retained_call_sign)
+    {
+        throw std::runtime_error("Unrelated value changed during key erasure.");
+    }
+    if (config.erase_value("Extended", "Use NTP"))
+    {
+        throw std::runtime_error("Repeated erasure should report no existing key.");
+    }
+
+    config.set_bool_value("Extended", "Use NTP", true);
+    config.commit_changes();
+    require_file_contains(filename, "Use NTP = true");
+}
+
 void test_exceptions(IniFile &config)
 {
     print_header("Testing INI exception processing.");
@@ -556,6 +604,13 @@ int main()
                  [&]()
                  {
                      test_reading(ini_file, kTestIni);
+                 });
+
+        run_test(ini_file,
+                 "test_key_erasure()",
+                 [&]()
+                 {
+                     test_key_erasure(ini_file, kTestIni);
                  });
 
         run_test(ini_file,
